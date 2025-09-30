@@ -27,6 +27,11 @@ class Note:
     trigger_conditions: List[TriggerCondition]
     pinned: bool = False
     name: str = ""
+    tags: List[str] = None
+
+    def __post_init__(self):
+        if self.tags is None:
+            self.tags = []
 
 
 @dataclass

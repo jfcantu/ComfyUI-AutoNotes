@@ -243,10 +243,44 @@ class AutoNotesManager {
         modeContainer.appendChild(modeLabel);
         modeContainer.appendChild(modeSelect);
 
+        // Tag filter section
+        const tagFilterContainer = document.createElement('div');
+        tagFilterContainer.style.marginBottom = '10px';
+
+        const tagFilterLabel = document.createElement('label');
+        tagFilterLabel.textContent = 'Filter by Tags: ';
+        tagFilterLabel.style.cssText = `
+            display: block;
+            margin-bottom: 5px;
+        `;
+
+        this.tagFilterSelect = document.createElement('div');
+        this.tagFilterSelect.style.cssText = `
+            background: #333;
+            border: 1px solid #555;
+            padding: 5px;
+            border-radius: 4px;
+            min-height: 30px;
+            cursor: pointer;
+            position: relative;
+        `;
+        this.tagFilterSelect.textContent = 'Click to select tags...';
+
+        this.selectedTagFilters = new Set();
+
+        this.tagFilterSelect.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showTagFilterDropdown();
+        });
+
+        tagFilterContainer.appendChild(tagFilterLabel);
+        tagFilterContainer.appendChild(this.tagFilterSelect);
+
         // Buttons
         const buttonContainer = document.createElement('div');
         buttonContainer.style.display = 'flex';
         buttonContainer.style.gap = '10px';
+        buttonContainer.style.flexWrap = 'wrap';
 
         const addButton = document.createElement('button');
         addButton.textContent = 'Add';
@@ -259,6 +293,19 @@ class AutoNotesManager {
             border-radius: 4px;
         `;
         addButton.addEventListener('click', () => this.addNote());
+
+        const addFromCurrentButton = document.createElement('button');
+        addFromCurrentButton.textContent = 'Add From Current Node';
+        addFromCurrentButton.style.cssText = `
+            background: #00a000;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            flex: 1;
+        `;
+        addFromCurrentButton.addEventListener('click', () => this.addNoteFromCurrentNode());
 
         const editButton = document.createElement('button');
         editButton.textContent = 'Edit';
@@ -273,9 +320,11 @@ class AutoNotesManager {
         editButton.addEventListener('click', () => this.openEditDialog());
 
         buttonContainer.appendChild(addButton);
+        buttonContainer.appendChild(addFromCurrentButton);
         buttonContainer.appendChild(editButton);
 
         controlPanel.appendChild(modeContainer);
+        controlPanel.appendChild(tagFilterContainer);
         controlPanel.appendChild(buttonContainer);
 
         // Notes display area
@@ -419,9 +468,22 @@ class AutoNotesManager {
     renderNotes() {
         this.notesContainer.innerHTML = '';
 
-        if (this.notes.length === 0) {
+        // Apply tag filtering
+        let filteredNotes = this.notes;
+        if (this.selectedTagFilters.size > 0) {
+            filteredNotes = this.notes.filter(note => {
+                const noteTags = note.tags || [];
+                // Note must have ALL selected tags (AND logic)
+                return Array.from(this.selectedTagFilters).every(filterTag =>
+                    noteTags.includes(filterTag)
+                );
+            });
+        }
+
+        if (filteredNotes.length === 0) {
             const emptyMessage = document.createElement('div');
-            emptyMessage.textContent = 'No notes to display';
+            emptyMessage.textContent = this.selectedTagFilters.size > 0 ?
+                'No notes match the selected tags' : 'No notes to display';
             emptyMessage.style.cssText = `
                 text-align: center;
                 color: #888;
@@ -432,8 +494,162 @@ class AutoNotesManager {
             return;
         }
 
-        for (const note of this.notes) {
+        for (const note of filteredNotes) {
             this.renderNote(note);
+        }
+    }
+
+    showTagFilterDropdown() {
+        // Collect all unique tags from all notes
+        const allTags = new Set();
+        for (const note of this.notes) {
+            if (note.tags) {
+                note.tags.forEach(tag => allTags.add(tag));
+            }
+        }
+
+        if (allTags.size === 0) {
+            alert('No tags found. Add tags to notes first.');
+            return;
+        }
+
+        // Remove existing dropdown
+        const existingDropdown = document.querySelector('.tag-filter-dropdown');
+        if (existingDropdown) {
+            existingDropdown.remove();
+            return;
+        }
+
+        // Create dropdown
+        const dropdown = document.createElement('div');
+        dropdown.className = 'tag-filter-dropdown';
+        dropdown.style.cssText = `
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            margin-top: 2px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+        `;
+
+        // Add "Clear All" option
+        const clearOption = document.createElement('div');
+        clearOption.textContent = 'Clear All Filters';
+        clearOption.style.cssText = `
+            padding: 8px 10px;
+            cursor: pointer;
+            color: #f88;
+            border-bottom: 1px solid #555;
+        `;
+        clearOption.addEventListener('mouseenter', () => {
+            clearOption.style.background = '#333';
+        });
+        clearOption.addEventListener('mouseleave', () => {
+            clearOption.style.background = '';
+        });
+        clearOption.addEventListener('click', () => {
+            this.selectedTagFilters.clear();
+            this.updateTagFilterDisplay();
+            this.refreshNotes();
+            dropdown.remove();
+        });
+        dropdown.appendChild(clearOption);
+
+        // Add tag options
+        Array.from(allTags).sort().forEach(tag => {
+            const option = document.createElement('div');
+            option.style.cssText = `
+                padding: 8px 10px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = this.selectedTagFilters.has(tag);
+
+            const label = document.createElement('span');
+            label.textContent = tag;
+
+            option.addEventListener('mouseenter', () => {
+                option.style.background = '#333';
+            });
+            option.addEventListener('mouseleave', () => {
+                option.style.background = '';
+            });
+            option.addEventListener('click', () => {
+                if (this.selectedTagFilters.has(tag)) {
+                    this.selectedTagFilters.delete(tag);
+                    checkbox.checked = false;
+                } else {
+                    this.selectedTagFilters.add(tag);
+                    checkbox.checked = true;
+                }
+                this.updateTagFilterDisplay();
+                this.refreshNotes();
+            });
+
+            option.appendChild(checkbox);
+            option.appendChild(label);
+            dropdown.appendChild(option);
+        });
+
+        this.tagFilterSelect.style.position = 'relative';
+        this.tagFilterSelect.appendChild(dropdown);
+
+        // Close dropdown when clicking outside
+        const closeDropdown = (e) => {
+            if (!this.tagFilterSelect.contains(e.target)) {
+                dropdown.remove();
+                document.removeEventListener('click', closeDropdown);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeDropdown);
+        }, 0);
+    }
+
+    updateTagFilterDisplay() {
+        if (this.selectedTagFilters.size === 0) {
+            this.tagFilterSelect.innerHTML = 'Click to select tags...';
+            this.tagFilterSelect.style.color = '';
+        } else {
+            this.tagFilterSelect.innerHTML = '';
+            this.tagFilterSelect.style.color = '#fff';
+            this.tagFilterSelect.style.cssText += `
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+            `;
+
+            Array.from(this.selectedTagFilters).forEach(tag => {
+                const tagBadge = document.createElement('span');
+                tagBadge.style.cssText = `
+                    background: #007acc;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 11px;
+                    display: inline-block;
+                `;
+                tagBadge.textContent = tag;
+                this.tagFilterSelect.appendChild(tagBadge);
+            });
+
+            // Re-add base styles
+            this.tagFilterSelect.style.background = '#333';
+            this.tagFilterSelect.style.border = '1px solid #555';
+            this.tagFilterSelect.style.padding = '5px';
+            this.tagFilterSelect.style.borderRadius = '4px';
+            this.tagFilterSelect.style.minHeight = '30px';
+            this.tagFilterSelect.style.cursor = 'pointer';
+            this.tagFilterSelect.style.position = 'relative';
         }
     }
 
@@ -501,6 +717,119 @@ class AutoNotesManager {
             border-top: 1px solid #555;
         `;
 
+        // Tags section (at the top)
+        const tagsSection = document.createElement('div');
+        tagsSection.style.cssText = `
+            padding: 10px;
+            border-bottom: 1px solid #555;
+            background: #252525;
+        `;
+
+        const tagsHeader = document.createElement('div');
+        tagsHeader.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        `;
+
+        const tagsLabel = document.createElement('span');
+        tagsLabel.textContent = 'Tags:';
+        tagsLabel.style.cssText = `
+            font-size: 11px;
+            color: #aaa;
+        `;
+
+        const addTagBtn = document.createElement('button');
+        addTagBtn.textContent = '+ Tag';
+        addTagBtn.style.cssText = `
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 2px 6px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 10px;
+        `;
+        addTagBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const tag = prompt('Enter tag name:');
+            if (tag && tag.trim()) {
+                const trimmedTag = tag.trim();
+                if (!note.tags) note.tags = [];
+                if (!note.tags.includes(trimmedTag)) {
+                    note.tags.push(trimmedTag);
+                    await this.updateNoteTags(note);
+                    this.renderNotes();
+                }
+            }
+        });
+
+        tagsHeader.appendChild(tagsLabel);
+        tagsHeader.appendChild(addTagBtn);
+
+        const tagsContainer = document.createElement('div');
+        tagsContainer.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            min-height: 20px;
+        `;
+
+        if (note.tags && note.tags.length > 0) {
+            note.tags.forEach(tag => {
+                const tagBadge = document.createElement('div');
+                tagBadge.style.cssText = `
+                    background: #007acc;
+                    color: white;
+                    padding: 3px 6px;
+                    border-radius: 3px;
+                    font-size: 11px;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                `;
+
+                const tagText = document.createElement('span');
+                tagText.textContent = tag;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = '×';
+                removeBtn.style.cssText = `
+                    background: transparent;
+                    border: none;
+                    color: white;
+                    cursor: pointer;
+                    font-size: 14px;
+                    padding: 0;
+                    line-height: 1;
+                `;
+                removeBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    note.tags = note.tags.filter(t => t !== tag);
+                    await this.updateNoteTags(note);
+                    this.renderNotes();
+                });
+
+                tagBadge.appendChild(tagText);
+                tagBadge.appendChild(removeBtn);
+                tagsContainer.appendChild(tagBadge);
+            });
+        } else {
+            const noTags = document.createElement('span');
+            noTags.textContent = 'No tags';
+            noTags.style.cssText = `
+                font-size: 11px;
+                color: #666;
+                font-style: italic;
+            `;
+            tagsContainer.appendChild(noTags);
+        }
+
+        tagsSection.appendChild(tagsHeader);
+        tagsSection.appendChild(tagsContainer);
+        contentContainer.appendChild(tagsSection);
+
         // Mode toggle (for markdown notes)
         let isEditMode = false;
         let modeToggle = null;
@@ -546,10 +875,15 @@ class AutoNotesManager {
             modeToggle = { viewBtn, editBtn };
         }
 
-        // View content (rendered markdown or plain text)
+        // View content (rendered markdown or plain text) - resizable
         const viewContent = document.createElement('div');
         viewContent.style.cssText = `
             padding: 10px;
+            min-height: 50px;
+            max-height: none;
+            overflow-y: auto;
+            position: relative;
+            resize: vertical;
         `;
 
         if (note.format_style === 'markdown') {
@@ -590,8 +924,28 @@ class AutoNotesManager {
             display: none;
         `;
 
-        saveBtn.addEventListener('click', async () => {
+        // Auto-save function
+        const autoSave = async () => {
             await this.updateNoteContent(note.uuid, editContent.value);
+            note.content = editContent.value;
+            // Update view content
+            if (note.format_style === 'markdown') {
+                viewContent.innerHTML = this.renderMarkdown(note.content);
+            } else {
+                viewContent.textContent = note.content;
+            }
+        };
+
+        saveBtn.addEventListener('click', async () => {
+            await autoSave();
+        });
+
+        // Auto-save when clicking off the textarea
+        editContent.addEventListener('blur', async () => {
+            // Only auto-save if content has changed
+            if (editContent.value !== note.content) {
+                await autoSave();
+            }
         });
 
         contentContainer.appendChild(viewContent);
@@ -600,7 +954,16 @@ class AutoNotesManager {
 
         // Toggle between view and edit mode
         if (modeToggle) {
-            const switchToView = () => {
+            const switchToView = async () => {
+                // Auto-save before switching to view
+                if (isEditMode && editContent.value !== note.content) {
+                    await autoSave();
+                }
+                // Copy the current height from editContent to viewContent
+                const currentHeight = editContent.offsetHeight;
+                if (currentHeight > 0) {
+                    viewContent.style.height = currentHeight + 'px';
+                }
                 isEditMode = false;
                 viewContent.style.display = 'block';
                 editContent.style.display = 'none';
@@ -611,6 +974,11 @@ class AutoNotesManager {
 
             const switchToEdit = () => {
                 isEditMode = true;
+                // Copy the current height from viewContent to editContent
+                const currentHeight = viewContent.offsetHeight;
+                if (currentHeight > 0) {
+                    editContent.style.height = currentHeight + 'px';
+                }
                 viewContent.style.display = 'none';
                 editContent.style.display = 'block';
                 saveBtn.style.display = 'block';
@@ -618,9 +986,9 @@ class AutoNotesManager {
                 modeToggle.editBtn.style.background = '#007acc';
             };
 
-            modeToggle.viewBtn.addEventListener('click', (e) => {
+            modeToggle.viewBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                switchToView();
+                await switchToView();
             });
 
             modeToggle.editBtn.addEventListener('click', (e) => {
@@ -631,6 +999,11 @@ class AutoNotesManager {
             // For plain text, click to edit directly
             viewContent.addEventListener('click', (e) => {
                 e.stopPropagation();
+                // Copy the current height from viewContent to editContent
+                const currentHeight = viewContent.offsetHeight;
+                if (currentHeight > 0) {
+                    editContent.style.height = currentHeight + 'px';
+                }
                 viewContent.style.display = 'none';
                 editContent.style.display = 'block';
                 saveBtn.style.display = 'block';
@@ -694,6 +1067,55 @@ class AutoNotesManager {
             if (noteResult.uuid) {
                 await this.refreshNotes();
                 await this.openEditDialog(noteResult.uuid);
+            }
+        } catch (error) {
+            console.error('Failed to create note:', error);
+            alert('Failed to create note');
+        }
+    }
+
+    async addNoteFromCurrentNode() {
+        // Check if a node is selected
+        if (!this.selectedNodeType) {
+            alert('Please select a node first');
+            return;
+        }
+
+        // Load folders first if not already loaded
+        await this.loadFolders();
+
+        // Show dialog to configure trigger and note details
+        const result = await this.showAddNoteFromCurrentNodeDialog();
+        if (!result) return;
+
+        try {
+            // Create the note
+            const response = await api.fetchApi('/autonotes/notes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: result.name,
+                    folder_uuid: result.folder_uuid
+                }),
+            });
+
+            const noteResult = await response.json();
+            if (noteResult.uuid) {
+                // Update the note with the trigger condition
+                await api.fetchApi(`/autonotes/notes/${noteResult.uuid}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        trigger_conditions: [result.triggerCondition]
+                    }),
+                });
+
+                // Just refresh notes - don't open the edit dialog
+                await this.refreshNotes();
             }
         } catch (error) {
             console.error('Failed to create note:', error);
@@ -955,6 +1377,506 @@ class AutoNotesManager {
         }
     }
 
+    async showAddNoteFromCurrentNodeDialog() {
+        return new Promise((resolve) => {
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                z-index: 3000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+
+            // Create dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: #2a2a2a;
+                border: 1px solid #555;
+                border-radius: 8px;
+                padding: 20px;
+                width: 500px;
+                max-height: 80vh;
+                overflow-y: auto;
+                color: #fff;
+                font-family: Arial, sans-serif;
+            `;
+
+            // Title
+            const title = document.createElement('h2');
+            title.textContent = 'Create Note from Current Node';
+            title.style.cssText = `
+                margin: 0 0 20px 0;
+                font-size: 1.3em;
+            `;
+
+            // Current node info
+            const nodeInfo = document.createElement('div');
+            nodeInfo.style.cssText = `
+                background: #1a1a1a;
+                padding: 10px;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                border: 1px solid #555;
+            `;
+            const nodeInfoText = document.createElement('div');
+            nodeInfoText.textContent = `Selected Node: ${this.nodeTypes[this.selectedNodeType]?.display_name || this.selectedNodeType}`;
+            nodeInfoText.style.fontWeight = 'bold';
+            nodeInfo.appendChild(nodeInfoText);
+
+            // Name input
+            const nameLabel = document.createElement('label');
+            nameLabel.textContent = 'Note Name:';
+            nameLabel.style.cssText = `
+                display: block;
+                margin-bottom: 5px;
+            `;
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.value = `Note for ${this.nodeTypes[this.selectedNodeType]?.display_name || this.selectedNodeType}`;
+            nameInput.style.cssText = `
+                width: 100%;
+                padding: 8px;
+                background: #1a1a1a;
+                color: #fff;
+                border: 1px solid #555;
+                border-radius: 4px;
+                box-sizing: border-box;
+                margin-bottom: 20px;
+                font-size: 14px;
+            `;
+
+            // Trigger type selector
+            const triggerTypeLabel = document.createElement('label');
+            triggerTypeLabel.textContent = 'Trigger Type:';
+            triggerTypeLabel.style.cssText = `
+                display: block;
+                margin-bottom: 5px;
+            `;
+
+            const triggerTypeSelect = document.createElement('select');
+            triggerTypeSelect.style.cssText = `
+                width: 100%;
+                padding: 8px;
+                background: #1a1a1a;
+                color: #fff;
+                border: 1px solid #555;
+                border-radius: 4px;
+                box-sizing: border-box;
+                margin-bottom: 20px;
+                font-size: 14px;
+            `;
+            triggerTypeSelect.innerHTML = `
+                <option value="node_selected">Node Selected - Shows when this node type is selected</option>
+                <option value="node_attribute">Node Attribute - Shows when this node has specific attribute value</option>
+                <option value="node_in_workflow">Node in Workflow - Shows when this node exists in workflow</option>
+                <option value="attribute_in_workflow">Attribute in Workflow - Shows when this node has an attribute in workflow</option>
+            `;
+
+            // Dynamic fields container
+            const dynamicFieldsContainer = document.createElement('div');
+            dynamicFieldsContainer.style.marginBottom = '20px';
+
+            // Trigger condition object
+            const triggerCondition = {
+                type: 'node_selected',
+                node_types: [this.selectedNodeType],
+                node_type: this.selectedNodeType,
+                attribute_name: null,
+                attribute_values: [],
+                workflow_names: []
+            };
+
+            // Function to update dynamic fields based on trigger type
+            const updateDynamicFields = () => {
+                dynamicFieldsContainer.innerHTML = '';
+                triggerCondition.type = triggerTypeSelect.value;
+
+                if (triggerCondition.type === 'node_selected') {
+                    // Already set with current node type
+                    triggerCondition.node_types = [this.selectedNodeType];
+                    const info = document.createElement('div');
+                    info.style.cssText = `
+                        background: #1a1a1a;
+                        padding: 10px;
+                        border-radius: 4px;
+                        border: 1px solid #555;
+                        color: #aaa;
+                    `;
+                    info.textContent = `This note will appear when "${this.nodeTypes[this.selectedNodeType]?.display_name || this.selectedNodeType}" is selected.`;
+                    dynamicFieldsContainer.appendChild(info);
+
+                } else if (triggerCondition.type === 'node_attribute') {
+                    // Attribute selector
+                    const attrLabel = document.createElement('label');
+                    attrLabel.textContent = 'Attribute:';
+                    attrLabel.style.cssText = `
+                        display: block;
+                        margin-bottom: 5px;
+                    `;
+
+                    const attrSelect = document.createElement('select');
+                    attrSelect.style.cssText = `
+                        width: 100%;
+                        padding: 8px;
+                        background: #1a1a1a;
+                        color: #fff;
+                        border: 1px solid #555;
+                        border-radius: 4px;
+                        margin-bottom: 10px;
+                        font-size: 14px;
+                    `;
+
+                    // Populate with node attributes
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = '-- Select Attribute --';
+                    attrSelect.appendChild(emptyOption);
+
+                    if (this.nodeTypes[this.selectedNodeType]) {
+                        const nodeInfo = this.nodeTypes[this.selectedNodeType];
+                        const inputs = nodeInfo.input?.required || {};
+                        const optionalInputs = nodeInfo.input?.optional || {};
+                        const allInputs = { ...inputs, ...optionalInputs };
+
+                        Object.keys(allInputs).forEach(attrName => {
+                            const option = document.createElement('option');
+                            option.value = attrName;
+                            option.textContent = attrName;
+                            attrSelect.appendChild(option);
+                        });
+                    }
+
+                    // Value input
+                    const valueLabel = document.createElement('label');
+                    valueLabel.textContent = 'Attribute Value (to match):';
+                    valueLabel.style.cssText = `
+                        display: block;
+                        margin-bottom: 5px;
+                    `;
+
+                    const valueInput = document.createElement('input');
+                    valueInput.type = 'text';
+                    valueInput.placeholder = 'Enter value...';
+                    valueInput.style.cssText = `
+                        width: 100%;
+                        padding: 8px;
+                        background: #1a1a1a;
+                        color: #fff;
+                        border: 1px solid #555;
+                        border-radius: 4px;
+                        font-size: 14px;
+                    `;
+
+                    // Update value input when attribute changes
+                    attrSelect.addEventListener('change', () => {
+                        triggerCondition.attribute_name = attrSelect.value;
+                        // Pre-fill with current value if available
+                        if (this.selectedNodeAttributes[attrSelect.value] !== undefined) {
+                            valueInput.value = String(this.selectedNodeAttributes[attrSelect.value]);
+                            triggerCondition.attribute_values = [valueInput.value];
+                        } else {
+                            valueInput.value = '';
+                            triggerCondition.attribute_values = [];
+                        }
+                    });
+
+                    valueInput.addEventListener('input', () => {
+                        triggerCondition.attribute_values = valueInput.value ? [valueInput.value] : [];
+                    });
+
+                    dynamicFieldsContainer.appendChild(attrLabel);
+                    dynamicFieldsContainer.appendChild(attrSelect);
+                    dynamicFieldsContainer.appendChild(valueLabel);
+                    dynamicFieldsContainer.appendChild(valueInput);
+
+                } else if (triggerCondition.type === 'node_in_workflow') {
+                    // Already set with current node type
+                    triggerCondition.node_types = [this.selectedNodeType];
+                    const info = document.createElement('div');
+                    info.style.cssText = `
+                        background: #1a1a1a;
+                        padding: 10px;
+                        border-radius: 4px;
+                        border: 1px solid #555;
+                        color: #aaa;
+                    `;
+                    info.textContent = `This note will appear when "${this.nodeTypes[this.selectedNodeType]?.display_name || this.selectedNodeType}" exists anywhere in the workflow.`;
+                    dynamicFieldsContainer.appendChild(info);
+
+                } else if (triggerCondition.type === 'attribute_in_workflow') {
+                    // Attribute selector
+                    const attrLabel = document.createElement('label');
+                    attrLabel.textContent = 'Attribute:';
+                    attrLabel.style.cssText = `
+                        display: block;
+                        margin-bottom: 5px;
+                    `;
+
+                    const attrSelect = document.createElement('select');
+                    attrSelect.style.cssText = `
+                        width: 100%;
+                        padding: 8px;
+                        background: #1a1a1a;
+                        color: #fff;
+                        border: 1px solid #555;
+                        border-radius: 4px;
+                        margin-bottom: 10px;
+                        font-size: 14px;
+                    `;
+
+                    // Populate with node attributes
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = '-- Select Attribute --';
+                    attrSelect.appendChild(emptyOption);
+
+                    if (this.nodeTypes[this.selectedNodeType]) {
+                        const nodeInfo = this.nodeTypes[this.selectedNodeType];
+                        const inputs = nodeInfo.input?.required || {};
+                        const optionalInputs = nodeInfo.input?.optional || {};
+                        const allInputs = { ...inputs, ...optionalInputs };
+
+                        Object.keys(allInputs).forEach(attrName => {
+                            const option = document.createElement('option');
+                            option.value = attrName;
+                            option.textContent = attrName;
+                            attrSelect.appendChild(option);
+                        });
+                    }
+
+                    // Value input (optional)
+                    const valueLabel = document.createElement('label');
+                    valueLabel.textContent = 'Attribute Value (optional, leave blank for any):';
+                    valueLabel.style.cssText = `
+                        display: block;
+                        margin-bottom: 5px;
+                    `;
+
+                    const valueInput = document.createElement('input');
+                    valueInput.type = 'text';
+                    valueInput.placeholder = 'Enter value or leave blank...';
+                    valueInput.style.cssText = `
+                        width: 100%;
+                        padding: 8px;
+                        background: #1a1a1a;
+                        color: #fff;
+                        border: 1px solid #555;
+                        border-radius: 4px;
+                        font-size: 14px;
+                    `;
+
+                    // Update value input when attribute changes
+                    attrSelect.addEventListener('change', () => {
+                        triggerCondition.attribute_name = attrSelect.value;
+                        // Pre-fill with current value if available
+                        if (this.selectedNodeAttributes[attrSelect.value] !== undefined) {
+                            valueInput.value = String(this.selectedNodeAttributes[attrSelect.value]);
+                            triggerCondition.attribute_values = [valueInput.value];
+                        } else {
+                            valueInput.value = '';
+                            triggerCondition.attribute_values = [];
+                        }
+                    });
+
+                    valueInput.addEventListener('input', () => {
+                        triggerCondition.attribute_values = valueInput.value ? [valueInput.value] : [];
+                    });
+
+                    dynamicFieldsContainer.appendChild(attrLabel);
+                    dynamicFieldsContainer.appendChild(attrSelect);
+                    dynamicFieldsContainer.appendChild(valueLabel);
+                    dynamicFieldsContainer.appendChild(valueInput);
+                }
+            };
+
+            triggerTypeSelect.addEventListener('change', updateDynamicFields);
+            updateDynamicFields();
+
+            // Folder selection
+            const folderLabel = document.createElement('label');
+            folderLabel.textContent = 'Folder:';
+            folderLabel.style.cssText = `
+                display: block;
+                margin-bottom: 5px;
+            `;
+
+            const folderTreeContainer = document.createElement('div');
+            folderTreeContainer.style.cssText = `
+                max-height: 150px;
+                overflow-y: auto;
+                background: #1a1a1a;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 10px;
+                margin-bottom: 20px;
+            `;
+
+            let selectedFolderUuid = null;
+
+            // Build folder tree
+            const buildFolderTree = (parentUuid, level) => {
+                const children = this.folders.filter(f => f.parent_uuid === parentUuid);
+                children.forEach(folder => {
+                    const folderOption = document.createElement('div');
+                    folderOption.style.cssText = `
+                        padding: 5px;
+                        padding-left: ${level * 15}px;
+                        cursor: pointer;
+                        border-radius: 3px;
+                    `;
+                    folderOption.textContent = `📁 ${folder.name}`;
+
+                    folderOption.addEventListener('mouseenter', () => {
+                        folderOption.style.background = '#007acc';
+                    });
+                    folderOption.addEventListener('mouseleave', () => {
+                        if (selectedFolderUuid !== folder.uuid) {
+                            folderOption.style.background = '';
+                        }
+                    });
+                    folderOption.addEventListener('click', () => {
+                        // Deselect previous
+                        folderTreeContainer.querySelectorAll('div').forEach(el => {
+                            el.style.background = '';
+                        });
+                        selectedFolderUuid = folder.uuid;
+                        folderOption.style.background = '#007acc';
+                    });
+
+                    folderTreeContainer.appendChild(folderOption);
+                    buildFolderTree(folder.uuid, level + 1);
+                });
+            };
+
+            // Add root option
+            const rootOption = document.createElement('div');
+            rootOption.style.cssText = `
+                padding: 5px;
+                cursor: pointer;
+                border-radius: 3px;
+                background: #007acc;
+            `;
+            rootOption.textContent = '[Root]';
+            rootOption.addEventListener('mouseenter', () => {
+                rootOption.style.background = '#007acc';
+            });
+            rootOption.addEventListener('mouseleave', () => {
+                if (selectedFolderUuid !== null) {
+                    rootOption.style.background = '';
+                }
+            });
+            rootOption.addEventListener('click', () => {
+                folderTreeContainer.querySelectorAll('div').forEach(el => {
+                    el.style.background = '';
+                });
+                selectedFolderUuid = null;
+                rootOption.style.background = '#007acc';
+            });
+            folderTreeContainer.appendChild(rootOption);
+            buildFolderTree(null, 1);
+
+            // Buttons
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = `
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+            `;
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.cssText = `
+                background: #666;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                cursor: pointer;
+                border-radius: 4px;
+            `;
+            cancelBtn.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+                resolve(null);
+            });
+
+            const createBtn = document.createElement('button');
+            createBtn.textContent = 'Create';
+            createBtn.style.cssText = `
+                background: #007acc;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                cursor: pointer;
+                border-radius: 4px;
+            `;
+            createBtn.addEventListener('click', () => {
+                const name = nameInput.value.trim();
+                if (!name) {
+                    alert('Please enter a note name');
+                    return;
+                }
+
+                // Validate trigger condition
+                if (triggerCondition.type === 'node_attribute' || triggerCondition.type === 'attribute_in_workflow') {
+                    if (!triggerCondition.attribute_name) {
+                        alert('Please select an attribute');
+                        return;
+                    }
+                }
+
+                document.body.removeChild(overlay);
+                resolve({
+                    name,
+                    folder_uuid: selectedFolderUuid,
+                    triggerCondition
+                });
+            });
+
+            // Handle Enter key
+            nameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    createBtn.click();
+                }
+            });
+
+            // Focus name input
+            setTimeout(() => nameInput.focus(), 0);
+
+            // Assemble dialog
+            buttonContainer.appendChild(cancelBtn);
+            buttonContainer.appendChild(createBtn);
+
+            dialog.appendChild(title);
+            dialog.appendChild(nodeInfo);
+            dialog.appendChild(nameLabel);
+            dialog.appendChild(nameInput);
+            dialog.appendChild(triggerTypeLabel);
+            dialog.appendChild(triggerTypeSelect);
+            dialog.appendChild(dynamicFieldsContainer);
+            dialog.appendChild(folderLabel);
+            dialog.appendChild(folderTreeContainer);
+            dialog.appendChild(buttonContainer);
+
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                    resolve(null);
+                }
+            });
+        });
+    }
+
     async loadFolders() {
         try {
             const response = await api.fetchApi('/autonotes/folders');
@@ -1159,9 +2081,13 @@ class AutoNotesManager {
                 e.preventDefault();
                 treeContainer.style.background = '';
 
-                const noteUuid = e.dataTransfer.getData('text/plain');
+                const noteUuid = e.dataTransfer.getData('application/x-note-uuid');
+                const folderUuid = e.dataTransfer.getData('application/x-folder-uuid');
+
                 if (noteUuid) {
                     await this.moveNoteToFolder(noteUuid, null, treeContainer, selectedNoteUuid);
+                } else if (folderUuid) {
+                    await this.moveFolderToFolder(folderUuid, null, treeContainer, selectedNoteUuid);
                 }
             }
         });
@@ -1180,6 +2106,39 @@ class AutoNotesManager {
         this.editDialog.appendChild(treeContainer);
         this.editDialog.appendChild(editPanel);
 
+        // Auto-save when clicking anywhere in the dialog (except textarea)
+        this.editDialog.addEventListener('click', async (e) => {
+            if (e.target !== this.contentTextarea && this.currentEditingNote && this.textareaChanged) {
+                await this.saveCurrentNote();
+                this.textareaChanged = false;
+            }
+        });
+
+        // Auto-save when clicking on the overlay (outside dialog)
+        overlay.addEventListener('click', async (e) => {
+            if (e.target === overlay && this.currentEditingNote && this.textareaChanged) {
+                await this.saveCurrentNote();
+                this.textareaChanged = false;
+            }
+        });
+
+        // Global document-level click handler for auto-save (catches clicks outside dialog)
+        this.globalAutoSaveHandler = async (e) => {
+            // Only auto-save if dialog is open and there are changes
+            if (this.editDialog && this.currentEditingNote && this.textareaChanged) {
+                // Check if click is outside the dialog and not on the textarea
+                if (!this.editDialog.contains(e.target) && e.target !== this.contentTextarea) {
+                    await this.saveCurrentNote();
+                    this.textareaChanged = false;
+                }
+            }
+        };
+
+        // Add the handler with a slight delay to avoid immediate triggering
+        setTimeout(() => {
+            document.addEventListener('click', this.globalAutoSaveHandler, true);
+        }, 100);
+
         overlay.appendChild(this.editDialog);
         document.body.appendChild(overlay);
     }
@@ -1189,13 +2148,14 @@ class AutoNotesManager {
         const existingItems = container.querySelectorAll('.tree-item, .folder-item');
         existingItems.forEach(item => item.remove());
 
-        // Render folders first
-        for (const folder of this.folders) {
+        // Render only root-level folders (parent_uuid === null)
+        const rootFolders = this.folders.filter(f => !f.parent_uuid);
+        for (const folder of rootFolders) {
             const folderItem = this.createFolderItem(folder, container, selectedNoteUuid);
             container.appendChild(folderItem);
         }
 
-        // Render notes (only top-level notes without folders for now)
+        // Render notes (only top-level notes without folders)
         for (const note of this.notes) {
             if (!note.folder_uuid) {
                 const noteItem = this.createNoteItem(note, selectedNoteUuid, container);
@@ -1212,6 +2172,7 @@ class AutoNotesManager {
         `;
 
         const folderHeader = document.createElement('div');
+        folderHeader.draggable = true;
         folderHeader.style.cssText = `
             display: flex;
             align-items: center;
@@ -1230,24 +2191,52 @@ class AutoNotesManager {
             font-size: 10px;
         `;
 
+        // Make folder draggable
+        folderHeader.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            e.dataTransfer.setData('application/x-folder-uuid', folder.uuid);
+            e.dataTransfer.effectAllowed = 'move';
+            folderHeader.style.opacity = '0.5';
+        });
+
+        folderHeader.addEventListener('dragend', (e) => {
+            folderHeader.style.opacity = '1';
+        });
+
         // Make folder a drop target
         folderHeader.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             folderHeader.style.background = '#007acc';
         });
 
         folderHeader.addEventListener('dragleave', (e) => {
+            e.stopPropagation();
             folderHeader.style.background = '#333';
         });
 
         folderHeader.addEventListener('drop', async (e) => {
             e.preventDefault();
+            e.stopPropagation();
             folderHeader.style.background = '#333';
 
-            const noteUuid = e.dataTransfer.getData('text/plain');
+            // Check if it's a note or folder being dropped
+            const noteUuid = e.dataTransfer.getData('application/x-note-uuid');
+            const folderUuid = e.dataTransfer.getData('application/x-folder-uuid');
+
             if (noteUuid) {
                 await this.moveNoteToFolder(noteUuid, folder.uuid, treeContainer, selectedNoteUuid);
+            } else if (folderUuid && folderUuid !== folder.uuid) {
+                // Prevent dropping a folder into itself
+                await this.moveFolderToFolder(folderUuid, folder.uuid, treeContainer, selectedNoteUuid);
             }
+        });
+
+        // Right-click context menu
+        folderHeader.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showFolderContextMenu(e, folder, treeContainer, selectedNoteUuid);
         });
 
         const folderName = document.createElement('span');
@@ -1291,23 +2280,30 @@ class AutoNotesManager {
         folderHeader.appendChild(renameBtn);
         folderHeader.appendChild(deleteBtn);
 
-        // Notes container (children)
-        const notesContainer = document.createElement('div');
-        notesContainer.style.cssText = `
+        // Children container (child folders and notes)
+        const childrenContainer = document.createElement('div');
+        childrenContainer.style.cssText = `
             padding-left: 20px;
             display: none;
         `;
+
+        // Find child folders
+        const childFolders = this.folders.filter(f => f.parent_uuid === folder.uuid);
+        for (const childFolder of childFolders) {
+            const childFolderItem = this.createFolderItem(childFolder, treeContainer, selectedNoteUuid);
+            childrenContainer.appendChild(childFolderItem);
+        }
 
         // Find notes in this folder
         const folderNotes = this.notes.filter(note => note.folder_uuid === folder.uuid);
         for (const note of folderNotes) {
             const noteItem = this.createNoteItem(note, selectedNoteUuid, treeContainer);
-            notesContainer.appendChild(noteItem);
+            childrenContainer.appendChild(noteItem);
         }
 
         // Toggle expand/collapse
         const isExpanded = this.expandedFolders.has(folder.uuid);
-        notesContainer.style.display = isExpanded ? 'block' : 'none';
+        childrenContainer.style.display = isExpanded ? 'block' : 'none';
         expandIcon.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
 
         folderHeader.addEventListener('click', (e) => {
@@ -1318,17 +2314,17 @@ class AutoNotesManager {
 
             if (this.expandedFolders.has(folder.uuid)) {
                 this.expandedFolders.delete(folder.uuid);
-                notesContainer.style.display = 'none';
+                childrenContainer.style.display = 'none';
                 expandIcon.style.transform = 'rotate(0deg)';
             } else {
                 this.expandedFolders.add(folder.uuid);
-                notesContainer.style.display = 'block';
+                childrenContainer.style.display = 'block';
                 expandIcon.style.transform = 'rotate(90deg)';
             }
         });
 
         folderItem.appendChild(folderHeader);
-        folderItem.appendChild(notesContainer);
+        folderItem.appendChild(childrenContainer);
 
         return folderItem;
     }
@@ -1348,7 +2344,8 @@ class AutoNotesManager {
 
         // Drag start
         noteItem.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/plain', note.uuid);
+            e.dataTransfer.setData('application/x-note-uuid', note.uuid);
+            e.dataTransfer.effectAllowed = 'move';
             noteItem.style.opacity = '0.5';
         });
 
@@ -1358,7 +2355,13 @@ class AutoNotesManager {
         });
 
         // Left click to select
-        noteItem.addEventListener('click', () => {
+        noteItem.addEventListener('click', async () => {
+            // Auto-save current note before switching
+            if (this.currentEditingNote && this.textareaChanged) {
+                await this.saveCurrentNote();
+                this.textareaChanged = false;
+            }
+
             // Remove previous selection
             treeContainer.querySelectorAll('.tree-item').forEach(item => {
                 item.style.background = '';
@@ -1403,6 +2406,31 @@ class AutoNotesManager {
             resize: none;
             font-family: monospace;
         `;
+
+        // Track if content has changed
+        this.textareaChanged = false;
+
+        // Auto-save on input (debounced)
+        let saveTimeout;
+        this.contentTextarea.addEventListener('input', () => {
+            this.textareaChanged = true;
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(async () => {
+                if (this.currentEditingNote && this.textareaChanged) {
+                    await this.saveCurrentNote();
+                    this.textareaChanged = false;
+                }
+            }, 1000); // Auto-save after 1 second of inactivity
+        });
+
+        // Auto-save on blur (when clicking outside the textarea)
+        this.contentTextarea.addEventListener('blur', async () => {
+            if (this.currentEditingNote && this.textareaChanged) {
+                clearTimeout(saveTimeout);
+                await this.saveCurrentNote();
+                this.textareaChanged = false;
+            }
+        });
 
         contentContainer.appendChild(contentLabel);
         contentContainer.appendChild(this.contentTextarea);
@@ -1452,6 +2480,66 @@ class AutoNotesManager {
 
         formatContainer.appendChild(formatDiv);
         formatContainer.appendChild(pinnedDiv);
+
+        // Tags section
+        const tagsContainer = document.createElement('div');
+        tagsContainer.style.cssText = `
+            margin-bottom: 10px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 10px;
+        `;
+
+        const tagsHeader = document.createElement('div');
+        tagsHeader.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        `;
+
+        const tagsTitle = document.createElement('h4');
+        tagsTitle.textContent = 'Tags';
+        tagsTitle.style.margin = '0';
+
+        const addTagButton = document.createElement('button');
+        addTagButton.textContent = '+ Add Tag';
+        addTagButton.style.cssText = `
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 11px;
+        `;
+
+        tagsHeader.appendChild(tagsTitle);
+        tagsHeader.appendChild(addTagButton);
+
+        this.tagsListContainer = document.createElement('div');
+        this.tagsListContainer.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        `;
+
+        this.currentTags = [];
+
+        addTagButton.addEventListener('click', () => {
+            const tag = prompt('Enter tag name:');
+            if (tag && tag.trim()) {
+                const trimmedTag = tag.trim();
+                if (!this.currentTags.includes(trimmedTag)) {
+                    this.currentTags.push(trimmedTag);
+                    this.renderTags();
+                    this.textareaChanged = true; // Mark as changed for auto-save
+                }
+            }
+        });
+
+        tagsContainer.appendChild(tagsHeader);
+        tagsContainer.appendChild(this.tagsListContainer);
 
         // Trigger conditions section
         const triggerContainer = document.createElement('div');
@@ -1561,6 +2649,7 @@ class AutoNotesManager {
 
         panel.appendChild(contentContainer);
         panel.appendChild(formatContainer);
+        panel.appendChild(tagsContainer);
         panel.appendChild(triggerContainer);
         panel.appendChild(buttonContainer);
 
@@ -1579,9 +2668,55 @@ class AutoNotesManager {
         this.formatSelect.value = note.format_style || 'plaintext';
         this.pinnedCheckbox.checked = note.pinned || false;
 
+        // Load tags
+        this.currentTags = [...(note.tags || [])];
+        this.renderTags();
+
         // Load trigger conditions
         this.currentTriggerConditions = [...(note.trigger_conditions || [])];
         this.renderTriggerConditions();
+    }
+
+    renderTags() {
+        this.tagsListContainer.innerHTML = '';
+
+        for (const tag of this.currentTags) {
+            const tagElement = document.createElement('div');
+            tagElement.style.cssText = `
+                background: #007acc;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            `;
+
+            const tagText = document.createElement('span');
+            tagText.textContent = tag;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '×';
+            removeBtn.style.cssText = `
+                background: transparent;
+                border: none;
+                color: white;
+                cursor: pointer;
+                font-size: 16px;
+                padding: 0;
+                line-height: 1;
+            `;
+            removeBtn.addEventListener('click', () => {
+                this.currentTags = this.currentTags.filter(t => t !== tag);
+                this.renderTags();
+                this.textareaChanged = true; // Mark as changed for auto-save
+            });
+
+            tagElement.appendChild(tagText);
+            tagElement.appendChild(removeBtn);
+            this.tagsListContainer.appendChild(tagElement);
+        }
     }
 
     addTriggerCondition() {
@@ -2658,6 +3793,7 @@ class AutoNotesManager {
             content: this.contentTextarea.value,
             format_style: this.formatSelect.value,
             pinned: this.pinnedCheckbox.checked,
+            tags: this.currentTags || [],
             trigger_conditions: cleanedTriggerConditions
         };
 
@@ -2688,8 +3824,18 @@ class AutoNotesManager {
     }
 
     async closeEditDialog(save = false) {
-        if (save && this.currentEditingNote) {
+        // Always auto-save if there are unsaved changes
+        if (this.currentEditingNote && this.textareaChanged) {
             await this.saveCurrentNote();
+            this.textareaChanged = false;
+        } else if (save && this.currentEditingNote) {
+            await this.saveCurrentNote();
+        }
+
+        // Remove global auto-save handler
+        if (this.globalAutoSaveHandler) {
+            document.removeEventListener('click', this.globalAutoSaveHandler, true);
+            this.globalAutoSaveHandler = null;
         }
 
         if (this.editDialog) {
@@ -2821,6 +3967,169 @@ class AutoNotesManager {
         } catch (error) {
             console.error('Failed to move note:', error);
             alert('Failed to move note');
+        }
+    }
+
+    async moveFolderToFolder(folderUuid, parentFolderUuid, treeContainer, selectedNoteUuid) {
+        try {
+            // Prevent circular references
+            if (folderUuid === parentFolderUuid) {
+                alert('Cannot move a folder into itself');
+                return;
+            }
+
+            // Check if parent is a descendant of the folder being moved
+            const isDescendant = (checkFolderId, ancestorId) => {
+                if (!checkFolderId) return false;
+                if (checkFolderId === ancestorId) return true;
+                const folder = this.folders.find(f => f.uuid === checkFolderId);
+                if (!folder) return false;
+                return isDescendant(folder.parent_uuid, ancestorId);
+            };
+
+            if (isDescendant(parentFolderUuid, folderUuid)) {
+                alert('Cannot move a folder into its own descendant');
+                return;
+            }
+
+            const response = await api.fetchApi(`/autonotes/folders/${folderUuid}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ parent_uuid: parentFolderUuid }),
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                await this.loadFolders();
+                this.renderNoteTree(treeContainer, selectedNoteUuid);
+            } else {
+                alert('Failed to move folder');
+            }
+        } catch (error) {
+            console.error('Failed to move folder:', error);
+            alert('Failed to move folder');
+        }
+    }
+
+    showFolderContextMenu(event, folder, treeContainer, selectedNoteUuid) {
+        // Remove any existing context menu
+        const existingMenu = document.querySelector('.folder-context-menu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+
+        const menu = document.createElement('div');
+        menu.className = 'folder-context-menu';
+        menu.style.cssText = `
+            position: fixed;
+            left: ${event.clientX}px;
+            top: ${event.clientY}px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 5px 0;
+            z-index: 10000;
+            min-width: 150px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        `;
+
+        const createChildOption = document.createElement('div');
+        createChildOption.textContent = 'New Child Folder';
+        createChildOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #fff;
+        `;
+        createChildOption.addEventListener('mouseenter', () => {
+            createChildOption.style.background = '#007acc';
+        });
+        createChildOption.addEventListener('mouseleave', () => {
+            createChildOption.style.background = '';
+        });
+        createChildOption.addEventListener('click', async () => {
+            menu.remove();
+            const folderName = prompt('Enter folder name:');
+            if (folderName) {
+                await this.createFolderWithParent(folderName, folder.uuid, treeContainer, selectedNoteUuid);
+            }
+        });
+
+        const renameOption = document.createElement('div');
+        renameOption.textContent = 'Rename';
+        renameOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #fff;
+        `;
+        renameOption.addEventListener('mouseenter', () => {
+            renameOption.style.background = '#007acc';
+        });
+        renameOption.addEventListener('mouseleave', () => {
+            renameOption.style.background = '';
+        });
+        renameOption.addEventListener('click', async () => {
+            menu.remove();
+            this.renameFolder(folder, treeContainer, selectedNoteUuid);
+        });
+
+        const deleteOption = document.createElement('div');
+        deleteOption.textContent = 'Delete';
+        deleteOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #f88;
+        `;
+        deleteOption.addEventListener('mouseenter', () => {
+            deleteOption.style.background = '#007acc';
+        });
+        deleteOption.addEventListener('mouseleave', () => {
+            deleteOption.style.background = '';
+        });
+        deleteOption.addEventListener('click', async () => {
+            menu.remove();
+            this.deleteFolder(folder, treeContainer, selectedNoteUuid);
+        });
+
+        menu.appendChild(createChildOption);
+        menu.appendChild(renameOption);
+        menu.appendChild(deleteOption);
+
+        document.body.appendChild(menu);
+
+        // Close menu when clicking outside
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+        }, 0);
+    }
+
+    async createFolderWithParent(name, parentUuid, treeContainer, selectedNoteUuid) {
+        try {
+            const response = await api.fetchApi('/autonotes/folders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, parent_uuid: parentUuid }),
+            });
+
+            const result = await response.json();
+            if (result.uuid) {
+                await this.loadFolders();
+                // Expand the parent folder
+                this.expandedFolders.add(parentUuid);
+                this.renderNoteTree(treeContainer, selectedNoteUuid);
+            }
+        } catch (error) {
+            console.error('Failed to create folder:', error);
+            alert('Failed to create folder');
         }
     }
 
@@ -2970,6 +4279,34 @@ class AutoNotesManager {
         } catch (error) {
             console.error('Failed to save note:', error);
             alert('Failed to save note');
+        }
+    }
+
+    async updateNoteTags(note) {
+        try {
+            const response = await api.fetchApi(`/autonotes/notes/${note.uuid}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    content: note.content,
+                    format_style: note.format_style,
+                    pinned: note.pinned,
+                    tags: note.tags || [],
+                    trigger_conditions: note.trigger_conditions || []
+                }),
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                await this.refreshNotes();
+            } else {
+                alert('Failed to update tags');
+            }
+        } catch (error) {
+            console.error('Failed to update tags:', error);
+            alert('Failed to update tags');
         }
     }
 }
