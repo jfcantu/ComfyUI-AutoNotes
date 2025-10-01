@@ -42,11 +42,18 @@ class Folder:
 
 
 class AutoNotesManager:
-    def __init__(self):
+    def __init__(self, user: str = "default"):
+        self.user = user
         self.user_dir = folder_paths.get_user_directory()
-        self.data_dir = os.path.join(self.user_dir, "autonotes")
+        # Store data in user-specific subdirectory (e.g., user/default/autonotes)
+        self.data_dir = os.path.join(self.user_dir, user, "autonotes")
         self.notes_file = os.path.join(self.data_dir, "notes.json")
         self.folders_file = os.path.join(self.data_dir, "folders.json")
+
+        # Debug output
+        print(f"AutoNotes: Initializing for user '{user}'")
+        print(f"AutoNotes: user_dir = {self.user_dir}")
+        print(f"AutoNotes: data_dir = {self.data_dir}")
 
         # Ensure data directory exists
         os.makedirs(self.data_dir, exist_ok=True)
@@ -228,7 +235,29 @@ class AutoNotesManager:
 
 
 # Global manager instance
-autonotes_manager = AutoNotesManager()
+# Helper function to get user from request
+def get_user_from_request(request) -> str:
+    """Get the user ID from the request headers, defaulting to 'default'."""
+    user = "default"
+    if "comfy-user" in request.headers:
+        user = request.headers["comfy-user"]
+        print(f"AutoNotes: Found comfy-user header: '{user}'")
+    else:
+        print(f"AutoNotes: No comfy-user header found, using default: '{user}'")
+
+    # If user is empty or None, use "default"
+    if not user:
+        print(f"AutoNotes: User was empty, forcing to 'default'")
+        user = "default"
+
+    return user
+
+
+# Helper function to get manager for request
+def get_manager_for_request(request) -> AutoNotesManager:
+    """Get a user-specific AutoNotesManager instance based on the request."""
+    user = get_user_from_request(request)
+    return AutoNotesManager(user)
 
 
 class AutoNotesNode:
@@ -253,6 +282,7 @@ class AutoNotesNode:
 @PromptServer.instance.routes.get("/autonotes/notes")
 async def get_notes(request):
     try:
+        manager = get_manager_for_request(request)
         mode = request.query.get('mode', 'all')
         selected_node_type = request.query.get('node_type')
         workflow_name = request.query.get('workflow_name')
@@ -273,7 +303,7 @@ async def get_notes(request):
             except:
                 pass
 
-        notes = autonotes_manager.get_notes_for_display(
+        notes = manager.get_notes_for_display(
             mode=mode,
             selected_node_type=selected_node_type,
             selected_node_attributes=selected_node_attributes,
@@ -296,11 +326,12 @@ async def get_notes(request):
 @PromptServer.instance.routes.post("/autonotes/notes")
 async def create_note(request):
     try:
+        manager = get_manager_for_request(request)
         data = await request.json()
         name = data.get('name', 'New Note')
         folder_uuid = data.get('folder_uuid')
 
-        note_uuid = autonotes_manager.create_note(name, folder_uuid)
+        note_uuid = manager.create_note(name, folder_uuid)
         return web.json_response({"uuid": note_uuid})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -309,6 +340,7 @@ async def create_note(request):
 @PromptServer.instance.routes.put("/autonotes/notes/{note_uuid}")
 async def update_note(request):
     try:
+        manager = get_manager_for_request(request)
         note_uuid = request.match_info['note_uuid']
         data = await request.json()
 
@@ -319,7 +351,7 @@ async def update_note(request):
                 trigger_conditions.append(TriggerCondition(**tc_data))
             data['trigger_conditions'] = trigger_conditions
 
-        success = autonotes_manager.update_note(note_uuid, **data)
+        success = manager.update_note(note_uuid, **data)
         return web.json_response({"success": success})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -328,8 +360,9 @@ async def update_note(request):
 @PromptServer.instance.routes.delete("/autonotes/notes/{note_uuid}")
 async def delete_note(request):
     try:
+        manager = get_manager_for_request(request)
         note_uuid = request.match_info['note_uuid']
-        success = autonotes_manager.delete_note(note_uuid)
+        success = manager.delete_note(note_uuid)
         return web.json_response({"success": success})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -338,7 +371,8 @@ async def delete_note(request):
 @PromptServer.instance.routes.get("/autonotes/folders")
 async def get_folders(request):
     try:
-        folders_data = [asdict(folder) for folder in autonotes_manager.folders.values()]
+        manager = get_manager_for_request(request)
+        folders_data = [asdict(folder) for folder in manager.folders.values()]
         return web.json_response(folders_data)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -347,11 +381,12 @@ async def get_folders(request):
 @PromptServer.instance.routes.post("/autonotes/folders")
 async def create_folder(request):
     try:
+        manager = get_manager_for_request(request)
         data = await request.json()
         name = data.get('name', 'New Folder')
         parent_uuid = data.get('parent_uuid')
 
-        folder_uuid = autonotes_manager.create_folder(name, parent_uuid)
+        folder_uuid = manager.create_folder(name, parent_uuid)
         return web.json_response({"uuid": folder_uuid})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -360,19 +395,20 @@ async def create_folder(request):
 @PromptServer.instance.routes.put("/autonotes/folders/{folder_uuid}")
 async def update_folder(request):
     try:
+        manager = get_manager_for_request(request)
         folder_uuid = request.match_info['folder_uuid']
         data = await request.json()
 
-        if folder_uuid not in autonotes_manager.folders:
+        if folder_uuid not in manager.folders:
             return web.json_response({"success": False, "error": "Folder not found"}, status=404)
 
-        folder = autonotes_manager.folders[folder_uuid]
+        folder = manager.folders[folder_uuid]
         if 'name' in data:
             folder.name = data['name']
         if 'parent_uuid' in data:
             folder.parent_uuid = data['parent_uuid']
 
-        autonotes_manager._save_folders()
+        manager._save_folders()
         return web.json_response({"success": True})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -381,20 +417,21 @@ async def update_folder(request):
 @PromptServer.instance.routes.delete("/autonotes/folders/{folder_uuid}")
 async def delete_folder(request):
     try:
+        manager = get_manager_for_request(request)
         folder_uuid = request.match_info['folder_uuid']
 
-        if folder_uuid not in autonotes_manager.folders:
+        if folder_uuid not in manager.folders:
             return web.json_response({"success": False, "error": "Folder not found"}, status=404)
 
         # Remove folder_uuid from any notes that reference it
-        for note in autonotes_manager.notes.values():
+        for note in manager.notes.values():
             if note.folder_uuid == folder_uuid:
                 note.folder_uuid = None
-        autonotes_manager._save_notes()
+        manager._save_notes()
 
         # Delete the folder
-        del autonotes_manager.folders[folder_uuid]
-        autonotes_manager._save_folders()
+        del manager.folders[folder_uuid]
+        manager._save_folders()
 
         return web.json_response({"success": True})
     except Exception as e:

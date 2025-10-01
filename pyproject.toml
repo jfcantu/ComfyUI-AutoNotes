@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ComfyUI-AutoNotes"
-version = "0.0.2"
+version = "0.0.4"
 description = "Automatically display context-aware notes based on workflow state, selected nodes, and node attributes in ComfyUI."
 authors = [
   {name = "John Cantu", email = "jfcantu@gmail.com"}
