@@ -4513,9 +4513,41 @@ class AutoNotesManager {
 }
 
 // Initialize the AutoNotes manager when the extension loads
+let autoNotesManagerInstance = null;
+
 app.registerExtension({
     name: "AutoNotes",
     async setup() {
-        new AutoNotesManager();
+        autoNotesManagerInstance = new AutoNotesManager();
     },
+    async beforeRegisterNodeDef(nodeType, nodeData, app) {
+        const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
+        nodeType.prototype.getExtraMenuOptions = function (_, options) {
+            const menuOptions = getExtraMenuOptions?.apply(this, arguments);
+
+            options.unshift({
+                content: "Create AutoNote for this node",
+                callback: async () => {
+                    if (autoNotesManagerInstance) {
+                        // Set the selected node type to this node's type
+                        autoNotesManagerInstance.selectedNodeType = this.type;
+
+                        // Collect node attributes
+                        const nodeAttributes = {};
+                        if (this.widgets) {
+                            for (const widget of this.widgets) {
+                                nodeAttributes[widget.name] = widget.value;
+                            }
+                        }
+                        autoNotesManagerInstance.selectedNodeAttributes = nodeAttributes;
+
+                        // Call the add note from current node function
+                        await autoNotesManagerInstance.addNoteFromCurrentNode();
+                    }
+                }
+            });
+
+            return menuOptions;
+        };
+    }
 });
