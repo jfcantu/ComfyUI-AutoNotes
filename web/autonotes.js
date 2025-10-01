@@ -1495,9 +1495,9 @@ class AutoNotesManager {
             `;
             triggerTypeSelect.innerHTML = `
                 <option value="node_selected">Node Selected - Shows when this node type is selected</option>
-                <option value="node_attribute">Node Attribute - Shows when this node has specific attribute value</option>
-                <option value="node_in_workflow">Node in Workflow - Shows when this node exists in workflow</option>
-                <option value="attribute_in_workflow">Attribute in Workflow - Shows when this node has an attribute in workflow</option>
+                <option value="node_selected_attribute">Node Selected + Attribute Value - Shows when this node has specific attribute value</option>
+                <option value="node_in_workflow">Node In Workflow - Shows when this node exists in workflow</option>
+                <option value="node_in_workflow_attribute">Node In Workflow + Attribute Value - Shows when this node has an attribute in workflow</option>
             `;
 
             // Dynamic fields container
@@ -1533,7 +1533,7 @@ class AutoNotesManager {
                     info.textContent = `This note will appear when "${this.nodeTypes[this.selectedNodeType]?.display_name || this.selectedNodeType}" is selected.`;
                     dynamicFieldsContainer.appendChild(info);
 
-                } else if (triggerCondition.type === 'node_attribute') {
+                } else if (triggerCondition.type === 'node_selected_attribute') {
                     // Attribute selector
                     const attrLabel = document.createElement('label');
                     attrLabel.textContent = 'Attribute:';
@@ -1631,7 +1631,7 @@ class AutoNotesManager {
                     info.textContent = `This note will appear when "${this.nodeTypes[this.selectedNodeType]?.display_name || this.selectedNodeType}" exists anywhere in the workflow.`;
                     dynamicFieldsContainer.appendChild(info);
 
-                } else if (triggerCondition.type === 'attribute_in_workflow') {
+                } else if (triggerCondition.type === 'node_in_workflow_attribute') {
                     // Attribute selector
                     const attrLabel = document.createElement('label');
                     attrLabel.textContent = 'Attribute:';
@@ -1844,7 +1844,7 @@ class AutoNotesManager {
                 }
 
                 // Validate trigger condition
-                if (triggerCondition.type === 'node_attribute' || triggerCondition.type === 'attribute_in_workflow') {
+                if (triggerCondition.type === 'node_selected_attribute' || triggerCondition.type === 'node_in_workflow_attribute') {
                     if (!triggerCondition.attribute_name) {
                         alert('Please select an attribute');
                         return;
@@ -2801,9 +2801,9 @@ class AutoNotesManager {
         titleSpan.style.flex = '1';
         const getConditionTitle = () => {
             if (condition.type === 'node_selected') return 'Node Selected';
-            if (condition.type === 'node_attribute') return 'Node Attribute';
-            if (condition.type === 'node_in_workflow') return 'Node in Workflow';
-            if (condition.type === 'attribute_in_workflow') return 'Attribute in Workflow';
+            if (condition.type === 'node_selected_attribute') return 'Node Selected + Attribute Value';
+            if (condition.type === 'node_in_workflow') return 'Node In Workflow';
+            if (condition.type === 'node_in_workflow_attribute') return 'Node In Workflow + Attribute Value';
             if (condition.type === 'workflow_name') return 'Workflow Name';
             return 'Trigger Condition';
         };
@@ -2841,9 +2841,9 @@ class AutoNotesManager {
         `;
         typeSelect.innerHTML = `
             <option value="node_selected">Node Selected</option>
-            <option value="node_attribute">Node Attribute</option>
-            <option value="node_in_workflow">Node in Workflow</option>
-            <option value="attribute_in_workflow">Attribute in Workflow</option>
+            <option value="node_selected_attribute">Node Selected + Attribute Value</option>
+            <option value="node_in_workflow">Node In Workflow</option>
+            <option value="node_in_workflow_attribute">Node In Workflow + Attribute Value</option>
             <option value="workflow_name">Workflow Name</option>
         `;
         typeSelect.value = condition.type;
@@ -2879,11 +2879,11 @@ class AutoNotesManager {
 
             if (condition.type === 'node_selected') {
                 this.createNodeSelectedFields(fieldsContainer, condition);
-            } else if (condition.type === 'node_attribute') {
+            } else if (condition.type === 'node_selected_attribute') {
                 this.createNodeAttributeFields(fieldsContainer, condition);
             } else if (condition.type === 'node_in_workflow') {
                 this.createNodeInWorkflowFields(fieldsContainer, condition);
-            } else if (condition.type === 'attribute_in_workflow') {
+            } else if (condition.type === 'node_in_workflow_attribute') {
                 this.createAttributeInWorkflowFields(fieldsContainer, condition);
             } else if (condition.type === 'workflow_name') {
                 this.createWorkflowNameFields(fieldsContainer, condition);

@@ -10,7 +10,7 @@ from aiohttp import web
 
 @dataclass
 class TriggerCondition:
-    type: str  # "node_selected", "node_attribute", "workflow_name"
+    type: str  # "node_selected", "node_selected_attribute", "node_in_workflow", "node_in_workflow_attribute", "workflow_name"
     node_types: Optional[List[str]] = None
     node_type: Optional[str] = None
     attribute_name: Optional[str] = None
@@ -50,11 +50,6 @@ class AutoNotesManager:
         self.notes_file = os.path.join(self.data_dir, "notes.json")
         self.folders_file = os.path.join(self.data_dir, "folders.json")
 
-        # Debug output
-        print(f"AutoNotes: Initializing for user '{user}'")
-        print(f"AutoNotes: user_dir = {self.user_dir}")
-        print(f"AutoNotes: data_dir = {self.data_dir}")
-
         # Ensure data directory exists
         os.makedirs(self.data_dir, exist_ok=True)
 
@@ -79,7 +74,7 @@ class AutoNotesManager:
                         notes[note.uuid] = note
                     return notes
             except Exception as e:
-                print(f"Error loading notes: {e}")
+                print(f"AutoNotes: Error loading notes: {e}")
         return {}
 
     def _load_folders(self) -> Dict[str, Folder]:
@@ -93,7 +88,7 @@ class AutoNotesManager:
                         folders[folder.uuid] = folder
                     return folders
             except Exception as e:
-                print(f"Error loading folders: {e}")
+                print(f"AutoNotes: Error loading folders: {e}")
         return {}
 
     def _save_notes(self):
@@ -108,7 +103,7 @@ class AutoNotesManager:
             with open(self.notes_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Error saving notes: {e}")
+            print(f"AutoNotes: Error saving notes: {e}")
 
     def _save_folders(self):
         try:
@@ -116,7 +111,7 @@ class AutoNotesManager:
             with open(self.folders_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Error saving folders: {e}")
+            print(f"AutoNotes: Error saving folders: {e}")
 
     def create_note(self, name: str, folder_uuid: Optional[str] = None) -> str:
         note_uuid = str(uuid.uuid4())
@@ -196,7 +191,7 @@ class AutoNotesManager:
                    condition.node_types is not None and
                    selected_node_type in condition.node_types)
 
-        elif condition.type == "node_attribute":
+        elif condition.type == "node_selected_attribute":
             if (selected_node_type == condition.node_type and
                 selected_node_attributes is not None and
                 condition.attribute_name in selected_node_attributes and
@@ -210,7 +205,7 @@ class AutoNotesManager:
                 # Check if any of the specified node types exist in the workflow
                 return any(node_type in workflow_nodes for node_type in condition.node_types)
 
-        elif condition.type == "attribute_in_workflow":
+        elif condition.type == "node_in_workflow_attribute":
             if (workflow_nodes is not None and
                 condition.node_type is not None and
                 condition.attribute_name is not None):
@@ -241,13 +236,9 @@ def get_user_from_request(request) -> str:
     user = "default"
     if "comfy-user" in request.headers:
         user = request.headers["comfy-user"]
-        print(f"AutoNotes: Found comfy-user header: '{user}'")
-    else:
-        print(f"AutoNotes: No comfy-user header found, using default: '{user}'")
 
     # If user is empty or None, use "default"
     if not user:
-        print(f"AutoNotes: User was empty, forcing to 'default'")
         user = "default"
 
     return user
