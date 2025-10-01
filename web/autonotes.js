@@ -14,6 +14,7 @@ class AutoNotesManager {
         this.workflowName = "";
         this.nodeTypes = {}; // Store node types and their definitions
         this.expandedFolders = new Set(); // Track which folders are expanded
+        this.expandedNotes = new Set(); // Track which notes are expanded
         this.lastSelectedNodeType = null; // Track last selected node to detect changes
 
         this.init();
@@ -1011,12 +1012,31 @@ class AutoNotesManager {
             });
         }
 
-        // Collapsible functionality
-        let isCollapsed = false;
+        // Collapsible functionality - restore previous state
+        const isExpanded = this.expandedNotes.has(note.uuid);
+        let isCollapsed = !isExpanded;
+
+        // Set initial state
+        contentContainer.style.display = isCollapsed ? 'none' : 'block';
+        collapseIcon.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+
         header.addEventListener('click', () => {
             isCollapsed = !isCollapsed;
             contentContainer.style.display = isCollapsed ? 'none' : 'block';
             collapseIcon.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+
+            // Update tracking state
+            if (isCollapsed) {
+                this.expandedNotes.delete(note.uuid);
+            } else {
+                this.expandedNotes.add(note.uuid);
+            }
+        });
+
+        // Context menu for sidebar notes
+        noteElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.showSidebarNoteContextMenu(e, note);
         });
 
         noteElement.appendChild(header);
@@ -4176,6 +4196,27 @@ class AutoNotesManager {
             }
         });
 
+        const duplicateOption = document.createElement('div');
+        duplicateOption.textContent = 'Duplicate';
+        duplicateOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #fff;
+        `;
+        duplicateOption.addEventListener('mouseenter', () => {
+            duplicateOption.style.background = '#007acc';
+        });
+        duplicateOption.addEventListener('mouseleave', () => {
+            duplicateOption.style.background = '';
+        });
+        duplicateOption.addEventListener('click', async () => {
+            menu.remove();
+            const newName = prompt('Enter name for duplicated note:', note.name);
+            if (newName) {
+                await this.duplicateNote(note.uuid, newName, treeContainer, selectedNoteUuid);
+            }
+        });
+
         const deleteOption = document.createElement('div');
         deleteOption.textContent = 'Delete';
         deleteOption.style.cssText = `
@@ -4197,6 +4238,7 @@ class AutoNotesManager {
         });
 
         menu.appendChild(renameOption);
+        menu.appendChild(duplicateOption);
         menu.appendChild(deleteOption);
         document.body.appendChild(menu);
 
@@ -4257,6 +4299,165 @@ class AutoNotesManager {
             console.error('Failed to delete note:', error);
             alert('Failed to delete note');
         }
+    }
+
+    async duplicateNote(noteUuid, newName, treeContainer, selectedNoteUuid) {
+        try {
+            // Get the original note
+            const originalNote = this.notes.find(n => n.uuid === noteUuid);
+            if (!originalNote) {
+                alert('Note not found');
+                return;
+            }
+
+            // Create a new note with the same folder
+            const response = await api.fetchApi('/autonotes/notes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: newName,
+                    folder_uuid: originalNote.folder_uuid
+                }),
+            });
+
+            const noteResult = await response.json();
+            if (noteResult.uuid) {
+                // Update the new note with all properties from the original
+                await api.fetchApi(`/autonotes/notes/${noteResult.uuid}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content: originalNote.content,
+                        format_style: originalNote.format_style,
+                        pinned: false, // Don't duplicate the pinned state
+                        tags: [...(originalNote.tags || [])],
+                        trigger_conditions: [...(originalNote.trigger_conditions || [])]
+                    }),
+                });
+
+                await this.refreshNotes();
+                if (treeContainer) {
+                    this.renderNoteTree(treeContainer, selectedNoteUuid);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to duplicate note:', error);
+            alert('Failed to duplicate note');
+        }
+    }
+
+    showSidebarNoteContextMenu(event, note) {
+        // Remove any existing context menu
+        const existingMenu = document.querySelector('.sidebar-note-context-menu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+
+        const menu = document.createElement('div');
+        menu.className = 'sidebar-note-context-menu';
+        menu.style.cssText = `
+            position: fixed;
+            left: ${event.clientX}px;
+            top: ${event.clientY}px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 5px 0;
+            z-index: 10000;
+            min-width: 150px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        `;
+
+        const editOption = document.createElement('div');
+        editOption.textContent = 'Edit';
+        editOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #fff;
+        `;
+        editOption.addEventListener('mouseenter', () => {
+            editOption.style.background = '#007acc';
+        });
+        editOption.addEventListener('mouseleave', () => {
+            editOption.style.background = '';
+        });
+        editOption.addEventListener('click', async () => {
+            menu.remove();
+            await this.openEditDialog(note.uuid);
+        });
+
+        const duplicateOption = document.createElement('div');
+        duplicateOption.textContent = 'Duplicate';
+        duplicateOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #fff;
+        `;
+        duplicateOption.addEventListener('mouseenter', () => {
+            duplicateOption.style.background = '#007acc';
+        });
+        duplicateOption.addEventListener('mouseleave', () => {
+            duplicateOption.style.background = '';
+        });
+        duplicateOption.addEventListener('click', async () => {
+            menu.remove();
+            const newName = prompt('Enter name for duplicated note:', note.name);
+            if (newName) {
+                await this.duplicateNote(note.uuid, newName, null, null);
+            }
+        });
+
+        const deleteOption = document.createElement('div');
+        deleteOption.textContent = 'Delete';
+        deleteOption.style.cssText = `
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #f88;
+        `;
+        deleteOption.addEventListener('mouseenter', () => {
+            deleteOption.style.background = '#cc0000';
+        });
+        deleteOption.addEventListener('mouseleave', () => {
+            deleteOption.style.background = '';
+        });
+        deleteOption.addEventListener('click', async () => {
+            menu.remove();
+            if (confirm(`Delete note "${note.name}"?`)) {
+                try {
+                    const response = await api.fetchApi(`/autonotes/notes/${note.uuid}`, {
+                        method: 'DELETE',
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        await this.refreshNotes();
+                    } else {
+                        alert('Failed to delete note');
+                    }
+                } catch (error) {
+                    console.error('Failed to delete note:', error);
+                    alert('Failed to delete note');
+                }
+            }
+        });
+
+        menu.appendChild(editOption);
+        menu.appendChild(duplicateOption);
+        menu.appendChild(deleteOption);
+        document.body.appendChild(menu);
+
+        // Close menu when clicking outside
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
     }
 
     async updateNoteContent(noteUuid, content) {
