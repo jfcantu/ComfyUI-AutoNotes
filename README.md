@@ -2,146 +2,182 @@
 
 An intelligent note-taking extension for ComfyUI that automatically displays relevant notes based on your workflow context.
 
-## Features
+## 🤔 Why use this?
 
-- **Smart Note Display**: Notes automatically appear based on trigger conditions like selected nodes, node attributes, or workflow names
-- **Sidebar Interface**: Non-intrusive sidebar that doesn't interfere with your workflow
-- **Multiple Display Modes**:
-  - "All" mode shows all notes
-  - "Automatic" mode shows only relevant notes based on triggers
-- **Rich Formatting**: Support for both plaintext and Markdown formatting
-- **Trigger Conditions**: Configure when notes should appear:
-  - **Node Selected**: Show notes when specific node types are selected
-  - **Node Attribute**: Show notes when nodes have specific attribute values
-  - **Workflow Name**: Show notes when workflow filename contains specific text
-- **Pinnable Notes**: Pin important notes to always display regardless of context
-- **Organized Storage**: Notes stored in your ComfyUI user directory with UUID-based organization
-- **Edit Dialog**: Full-featured editor with tree view and trigger condition management
+From time to time, I've found myself wanting to take notes on my experimentation, but usually in a specific context - what sampler settings work well with a particular checkpoint, what prompts work well and don't well, what a particular checkpoint is good/bad at, and so on.
 
-## Installation
+The problem is keeping those notes organized, and readily available while using ComfyUI. So I made this extension [by telliing Claude Code what to do], with the following goals:
 
-1. Clone or download this repository into your ComfyUI `custom_nodes` directory:
+- **Easy to access**: Notes should be readily available and easy to edit.
+  - Notes appear in the sidebar, and can be edited with a single click.
+  - Notes can be pinned to the sidebar, so that they always appear regardless of context.
+- **Context-specific**: I don't want to have to scroll through a giant text blob, or search through multiple text blobs to find what I need.
+  - Notes can be configured to automatically appear only when wanted, using a variety of triggers:
+    - When at least one of a list of nodes is present in a workspace.
+    - When at least one of a list of nodes is selected.
+    - When a specific node is present/selected, AND a specific attribute on the node matches a condition.
+- **Easy to organize**: I want to be able to find/filter notes easily.
+  - Notes can be organized into folders, and assigned tags which can be used for searching/filtering.
 
-   ```
+## 😃 Neat! How do I get it?
+
+### Quick Install (Recommended)
+
+Use [ComfyUI-Manager](https://github.com/ltdrdata/ComfyUI-Manager):
+
+1. Open ComfyUI Manager
+2. Search for "AutoNotes"
+3. Click Install
+4. Restart ComfyUI
+
+### Manual Install
+
+1. Navigate to your ComfyUI custom nodes directory:
+
+   ```bash
    cd ComfyUI/custom_nodes
-   git clone https://github.com/yourusername/ComfyUI-AutoNotes.git
    ```
 
-2. Restart ComfyUI
+2. Clone this repository:
 
-3. The AutoNotes sidebar will appear on the right side of your ComfyUI interface
+   ```bash
+   git clone https://github.com/jfcantu/ComfyUI-AutoNotes.git
+   ```
 
-## Usage
+3. Restart ComfyUI
 
-### Basic Operations
+The AutoNotes sidebar will appear on the right side of your interface.
 
-1. **Creating Notes**: Click the "Add" button in the sidebar control panel
-2. **Editing Notes**: Click the "Edit" button to open the full editor dialog
-3. **Display Modes**: Switch between "All" and "Automatic" in the dropdown
+## 😨 Okay, now how do I use it?
 
-### Setting Up Trigger Conditions
+### Creating Your First Note
 
-In the Edit dialog, you can configure when notes should automatically appear:
+#### Option 1: Quick Add
 
-#### Node Selected Trigger
+1. Click the **Add** button in the sidebar.
+2. Give your note a name, and select a folder for it to go in.
+3. Start typing!
 
-- Displays the note when any of the specified node types is selected
-- Example: `CheckpointLoaderSimple, LoraLoader`
+#### Option 2: Smart Add from Selected Node
 
-#### Node Attribute Trigger
+1. Two options:
+   1. Right-click any node in your workflow and select **"Create AutoNote for this node"**.
+   2. Click any node in your workflow, and click "Add From Current Node" on the sidebar.
+2. A dialog will appear for configuring your new note. It will be pre-configured with trigger conditions for that node type and its current settings.
 
-- Displays the note when a specific node has certain attribute values
-- Useful for showing notes about specific models or settings
-- Example:
-  - Node Type: `CheckpointLoaderSimple`
-  - Attribute Name: `ckpt_name`
-  - Attribute Values: `mymodel.safetensors, specialmodel.ckpt`
+### Display Modes
 
-#### Workflow Name Trigger
+Switch between two display modes using the dropdown:
 
-- Displays the note when the workflow filename contains specific text
-- Example: `portrait, character, anime`
+- **All**: Shows all notes.
+- **Automatic**: Shows only relevant notes based on trigger conditions.
 
-### Example Use Cases
+### Setting Up Triggers
 
-1. **Model-Specific Notes**: Create notes with tips about specific checkpoints that appear when you select them
-2. **Node Documentation**: Add usage instructions that appear when you select certain node types
-3. **Workflow Reminders**: Set up notes that remind you of important settings for specific types of workflows
-4. **Quick Reference**: Pin frequently-used information to always stay visible
+Triggers control when notes automatically appear. Edit a note to configure its triggers:
+
+#### "Node Selected" Trigger
+
+Shows the note when you select specific node types.
+
+**Example**: Create a note with tips about LoRA usage.
+
+- Trigger Type: `Node Selected`
+- Node Types: `LoraLoader`
+
+This note will automatically appear whenever you select a LoRA loader node, and disappear when you deselect it.
+
+#### "Node Selected + Attribute" Trigger
+
+Shows the note when you select a specific node type, and that node has certain attribute values.
+
+**Example**: Document settings for your favorite checkpoint
+
+- Trigger Type: `Node Attribute`
+- Node Type: `CheckpointLoaderSimple`
+- Attribute Name: `ckpt_name`
+- Attribute Values: `myFavoriteModel.safetensors`
+
+This note will only appear when you select a CheckpointLoaderSimple node, AND the `ckpt_name` is set to `myFavoriteModel.safetensors`
+
+#### "Node In Workflow" and "Node In Workflow + Attribute" Trigger
+
+These are mostly identical to the previous two triggers. The only difference is that they will appear if the node or node+attribute combination is anywhere in the workflow, regardless of whether it's selected or not.
+
+#### 📝 Workflow Name Trigger
+
+Shows the note when the workflow filename contains specific text.
+
+**Example**: Workflow-specific reminders
+
+- Trigger Type: `Workflow Name`
+- Workflow Names: `portrait`, `character`
+
+This note will appear if "portrait" or "character" appear in the workflow name.
+
+## 💡 Example Use Cases
+
+### Model Documentation
+
+Create notes for each checkpoint or LoRA with optimal settings, trigger words, and usage tips. They'll appear automatically when you select that model.
+
+### Node Usage Guides
+
+Document complex nodes with usage instructions that appear when you select them. Great for nodes you don't use every day.
+
+### Workflow Templates
+
+Pin step-by-step checklists for common workflows (portraits, landscapes, upscaling, etc.).
+
+### Troubleshooting Tips
+
+Create notes triggered by problematic node combinations to remind yourself of known issues and solutions.
+
+### Quick Reference
+
+Pin keyboard shortcuts, color management notes, or other frequently-needed information.
+
+## 🛠️ Technical Details
 
 ### Data Storage
 
-Notes are stored in your ComfyUI user directory under `autonotes/`:
-
-- `notes.json`: Contains all note data and metadata
-- `folders.json`: Contains folder organization (future feature)
-
-## Technical Details
-
-### File Structure
+Notes are stored per-user in your ComfyUI user directory:
 
 ```text
-ComfyUI-AutoNotes/
-├── __init__.py              # Extension entry point
-├── autonotes.py            # Main Python backend
-├── web/
-│   └── autonotes.js        # Frontend JavaScript
-├── README.md               # This file
-└── requirements.md         # Original requirements document
+ComfyUI/user/<username>/autonotes/
+├── notes.json    # All note content and metadata
+└── folders.json  # Folder organization
 ```
 
 ### API Endpoints
 
-The extension exposes REST API endpoints for note management:
+The extension provides REST API endpoints:
 
-- `GET /autonotes/notes` - Retrieve notes with filtering
-- `POST /autonotes/notes` - Create new note
-- `PUT /autonotes/notes/{uuid}` - Update existing note
+- `GET /autonotes/notes` - Retrieve filtered notes
+- `POST /autonotes/notes` - Create note
+- `PUT /autonotes/notes/{uuid}` - Update note
 - `DELETE /autonotes/notes/{uuid}` - Delete note
 - `GET /autonotes/folders` - Retrieve folders
-- `POST /autonotes/folders` - Create new folder
+- `POST /autonotes/folders` - Create folder
+- `PUT /autonotes/folders/{uuid}` - Update folder
+- `DELETE /autonotes/folders/{uuid}` - Delete folder
 
-### Data Models
+### Project Structure
 
-**Note Structure**:
-
-```json
-{
-  "uuid": "unique-identifier",
-  "folder_uuid": "parent-folder-id",
-  "name": "Note Title",
-  "content": "Note content...",
-  "format_style": "plaintext|markdown",
-  "pinned": true|false,
-  "trigger_conditions": [...]
-}
+```text
+ComfyUI-AutoNotes/
+├── __init__.py              # Extension entry point
+├── autonotes.py             # Python backend (data management, API)
+├── web/
+│   └── autonotes.js         # JavaScript frontend (UI, interactions)
+├── pyproject.toml           # Project metadata
+└── README.md                # This file
 ```
 
-**Trigger Condition Structure**:
+## 🤝 Contributing
 
-```json
-{
-  "type": "node_selected|node_attribute|workflow_name",
-  "node_types": ["NodeType1", "NodeType2"],
-  "node_type": "SpecificNodeType",
-  "attribute_name": "attribute_name",
-  "attribute_values": ["value1", "value2"],
-  "workflow_names": ["name1", "name2"]
-}
-```
-
-## Development
-
-The extension follows ComfyUI's standard custom node structure:
-
-- Python backend handles data management and API endpoints
-- JavaScript frontend provides the user interface
-- Uses ComfyUI's built-in web server and extension system
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly with ComfyUI
-5. Submit a pull request
+1. Fork the repository.
+2. Create a feature branch.
+3. Make changes with proper documentation.
+4. Add tests for new functionality.
+5. Submit a pull request.
