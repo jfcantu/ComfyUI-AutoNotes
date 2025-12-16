@@ -128,21 +128,21 @@ class AutoNotesManager {
 
         const topBarHeight = calculateTopBarHeight();
 
-        // Create sidebar container - full height with padding at top
+        // Create sidebar container - starts below top bar
         this.sidebar = document.createElement('div');
         this.sidebar.id = 'autonotes-sidebar';
         this.sidebar.style.cssText = `
             position: fixed;
             right: 0;
-            top: 0;
+            top: ${topBarHeight}px;
             width: ${savedWidth}px;
-            height: 100vh;
+            height: calc(100vh - ${topBarHeight}px);
             background: #2a2a2a;
             border-left: 1px solid #555;
             z-index: 1000;
             display: flex;
             flex-direction: column;
-            padding: ${topBarHeight}px 10px 10px 10px;
+            padding: 10px;
             box-sizing: border-box;
             font-family: Arial, sans-serif;
             color: #fff;
@@ -206,6 +206,27 @@ class AutoNotesManager {
         });
 
         this.sidebar.appendChild(resizeHandle);
+
+        // Collapse button centered on the left edge of sidebar
+        const collapseButton = document.createElement('button');
+        collapseButton.textContent = '▶';
+        collapseButton.title = 'Collapse AutoNotes';
+        collapseButton.style.cssText = `
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #444;
+            color: white;
+            border: 1px solid #555;
+            padding: 20px 6px;
+            cursor: pointer;
+            border-radius: 4px 0 0 4px;
+            z-index: 1002;
+            font-size: 14px;
+        `;
+        collapseButton.addEventListener('click', () => this.collapseSidebar());
+        this.sidebar.appendChild(collapseButton);
 
         // Control panel
         const controlPanel = document.createElement('div');
@@ -340,6 +361,72 @@ class AutoNotesManager {
         this.sidebar.appendChild(this.notesContainer);
 
         document.body.appendChild(this.sidebar);
+
+        // Load collapsed state
+        const isCollapsed = localStorage.getItem('autonotes_sidebarCollapsed') === 'true';
+        if (isCollapsed) {
+            this.collapseSidebar();
+        }
+    }
+
+    collapseSidebar() {
+        if (!this.sidebar) return;
+
+        // Save current width before collapsing
+        localStorage.setItem('autonotes_sidebarWidth', parseInt(this.sidebar.style.width));
+
+        // Hide sidebar content
+        this.sidebar.style.width = '0px';
+        this.sidebar.style.padding = '0';
+        this.sidebar.style.border = 'none';
+
+        // Save collapsed state
+        localStorage.setItem('autonotes_sidebarCollapsed', 'true');
+
+        // Create expand toggle button
+        if (!this.expandToggle) {
+            this.expandToggle = document.createElement('button');
+            this.expandToggle.textContent = '◀';
+            this.expandToggle.title = 'Expand AutoNotes';
+            this.expandToggle.style.cssText = `
+                position: fixed;
+                right: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                background: #2a2a2a;
+                color: white;
+                border: 1px solid #555;
+                border-right: none;
+                padding: 20px 8px;
+                cursor: pointer;
+                border-radius: 4px 0 0 4px;
+                z-index: 1000;
+                font-size: 16px;
+            `;
+            this.expandToggle.addEventListener('click', () => this.expandSidebar());
+            document.body.appendChild(this.expandToggle);
+        }
+        this.expandToggle.style.display = 'block';
+    }
+
+    expandSidebar() {
+        if (!this.sidebar) return;
+
+        // Restore saved width
+        const savedWidth = localStorage.getItem('autonotes_sidebarWidth') || '300';
+        this.sidebar.style.width = savedWidth + 'px';
+
+        // Restore padding
+        this.sidebar.style.padding = '10px';
+        this.sidebar.style.borderLeft = '1px solid #555';
+
+        // Save expanded state
+        localStorage.setItem('autonotes_sidebarCollapsed', 'false');
+
+        // Hide expand toggle
+        if (this.expandToggle) {
+            this.expandToggle.style.display = 'none';
+        }
     }
 
     setupEventListeners() {
