@@ -41,7 +41,12 @@ class AutoNotesManager {
         // Load node definitions
         await this.loadNodeTypes();
 
-        this.createSidebar();
+        // Try to use ComfyUI's built-in sidebar tab API, fall back to legacy sidebar
+        if (app.extensionManager?.registerSidebarTab) {
+            this.registerAsSidebarTab();
+        } else {
+            this.createLegacySidebar();
+        }
         this.setupEventListeners();
         await this.refreshNotes();
     }
@@ -79,161 +84,63 @@ class AutoNotesManager {
         }
     }
 
-    createSidebar() {
-        // Load saved width from localStorage
-        const savedWidth = localStorage.getItem('autonotes_sidebarWidth') || '300';
-
-        // Calculate top bar height dynamically
-        const calculateTopBarHeight = () => {
-            // Check if user has manually set a value in localStorage
-            const manualHeight = localStorage.getItem('autonotes_topBarHeight');
-            if (manualHeight) {
-                const height = parseInt(manualHeight);
-                console.log('AutoNotes: Using manually configured top bar height:', height);
-                return height;
+    registerAsSidebarTab() {
+        app.extensionManager.registerSidebarTab({
+            id: 'autonotes',
+            icon: 'pi pi-book',
+            title: 'AutoNotes',
+            tooltip: 'AutoNotes - Workflow Documentation',
+            type: 'custom',
+            render: (container) => {
+                this.buildSidebarContent(container);
             }
+        });
+    }
 
-            // Look for ComfyUI's main menu bar that contains buttons like Manager, Queue, etc.
-            const allElements = document.querySelectorAll('*');
-            let candidates = [];
-
-            for (const el of allElements) {
-                const style = window.getComputedStyle(el);
-                const position = style.position;
-
-                if (position === 'fixed' || position === 'absolute') {
-                    const rect = el.getBoundingClientRect();
-                    // Look for elements near the top that are reasonably wide (likely to be top bars)
-                    // Relaxed criteria: width > 300 instead of 500
-                    if (rect.top >= 0 && rect.top <= 100 && rect.width > 300 && rect.bottom < 250 && rect.bottom > 50) {
-                        candidates.push({ bottom: rect.bottom, width: rect.width, element: el.tagName });
-                    }
-                }
-            }
-
-            // Sort by bottom position
-            if (candidates.length > 0) {
-                candidates.sort((a, b) => b.bottom - a.bottom);
-                const topBarBottom = Math.ceil(candidates[0].bottom);
-                console.log('AutoNotes: Detected top bar height:', topBarBottom, 'from', candidates[0].element, 'candidates:', candidates.length);
-                console.log('AutoNotes: To manually override, set: localStorage.setItem("autonotes_topBarHeight", "YOUR_VALUE")');
-                return topBarBottom;
-            }
-
-            // Fallback - use a reasonable default that's close to the top bar
-            console.log('AutoNotes: Using fallback top bar height: 140 (no candidates found)');
-            console.log('AutoNotes: To manually override, set: localStorage.setItem("autonotes_topBarHeight", "YOUR_VALUE")');
-            return 140;
-        };
-
-        const topBarHeight = calculateTopBarHeight();
-
-        // Create sidebar container - starts below top bar
+    createLegacySidebar() {
         this.sidebar = document.createElement('div');
         this.sidebar.id = 'autonotes-sidebar';
         this.sidebar.style.cssText = `
             position: fixed;
             right: 0;
-            top: ${topBarHeight}px;
-            width: ${savedWidth}px;
-            height: calc(100vh - ${topBarHeight}px);
-            background: #2a2a2a;
-            border-left: 1px solid #555;
+            top: 0;
+            width: 300px;
+            height: 100vh;
+            background: var(--comfy-menu-bg, #2a2a2a);
+            border-left: 1px solid var(--border-color, #555);
             z-index: 1000;
             display: flex;
             flex-direction: column;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            color: var(--fg-color, #fff);
+        `;
+        this.buildSidebarContent(this.sidebar);
+        document.body.appendChild(this.sidebar);
+    }
+
+    buildSidebarContent(container) {
+        container.innerHTML = '';
+
+        // Main wrapper
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            height: 100%;
             padding: 10px;
             box-sizing: border-box;
             font-family: Arial, sans-serif;
-            color: #fff;
+            color: var(--fg-color, #fff);
         `;
-
-        // Create resize handle
-        const resizeHandle = document.createElement('div');
-        resizeHandle.style.cssText = `
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 5px;
-            height: 100%;
-            cursor: ew-resize;
-            background: transparent;
-            z-index: 1001;
-        `;
-
-        resizeHandle.addEventListener('mouseenter', () => {
-            resizeHandle.style.background = '#007acc';
-        });
-
-        resizeHandle.addEventListener('mouseleave', () => {
-            if (!this.isResizing) {
-                resizeHandle.style.background = 'transparent';
-            }
-        });
-
-        // Resize functionality
-        this.isResizing = false;
-        let startX, startWidth;
-
-        resizeHandle.addEventListener('mousedown', (e) => {
-            this.isResizing = true;
-            startX = e.clientX;
-            startWidth = parseInt(this.sidebar.style.width);
-            resizeHandle.style.background = '#007acc';
-            document.body.style.cursor = 'ew-resize';
-            document.body.style.userSelect = 'none';
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!this.isResizing) return;
-
-            const dx = startX - e.clientX;
-            const newWidth = Math.max(200, Math.min(800, startWidth + dx));
-            this.sidebar.style.width = newWidth + 'px';
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (this.isResizing) {
-                this.isResizing = false;
-                resizeHandle.style.background = 'transparent';
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-
-                // Save width to localStorage
-                localStorage.setItem('autonotes_sidebarWidth', parseInt(this.sidebar.style.width));
-            }
-        });
-
-        this.sidebar.appendChild(resizeHandle);
-
-        // Collapse button centered on the left edge of sidebar
-        const collapseButton = document.createElement('button');
-        collapseButton.textContent = '▶';
-        collapseButton.title = 'Collapse AutoNotes';
-        collapseButton.style.cssText = `
-            position: absolute;
-            left: -15px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #444;
-            color: white;
-            border: 1px solid #555;
-            padding: 20px 6px;
-            cursor: pointer;
-            border-radius: 4px 0 0 4px;
-            z-index: 1002;
-            font-size: 14px;
-        `;
-        collapseButton.addEventListener('click', () => this.collapseSidebar());
-        this.sidebar.appendChild(collapseButton);
 
         // Control panel
         const controlPanel = document.createElement('div');
         controlPanel.style.cssText = `
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid #555;
+            border-bottom: 1px solid var(--border-color, #555);
+            flex-shrink: 0;
         `;
 
         // Display mode selector
@@ -246,9 +153,9 @@ class AutoNotesManager {
 
         const modeSelect = document.createElement('select');
         modeSelect.style.cssText = `
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
+            background: var(--comfy-input-bg, #333);
+            color: var(--fg-color, #fff);
+            border: 1px solid var(--border-color, #555);
             padding: 5px;
         `;
         modeSelect.innerHTML = `
@@ -278,8 +185,8 @@ class AutoNotesManager {
 
         this.tagFilterSelect = document.createElement('div');
         this.tagFilterSelect.style.cssText = `
-            background: #333;
-            border: 1px solid #555;
+            background: var(--comfy-input-bg, #333);
+            border: 1px solid var(--border-color, #555);
             padding: 5px;
             border-radius: 4px;
             min-height: 30px;
@@ -357,75 +264,13 @@ class AutoNotesManager {
             padding-right: 5px;
         `;
 
-        this.sidebar.appendChild(controlPanel);
-        this.sidebar.appendChild(this.notesContainer);
+        wrapper.appendChild(controlPanel);
+        wrapper.appendChild(this.notesContainer);
+        container.appendChild(wrapper);
 
-        document.body.appendChild(this.sidebar);
-
-        // Load collapsed state
-        const isCollapsed = localStorage.getItem('autonotes_sidebarCollapsed') === 'true';
-        if (isCollapsed) {
-            this.collapseSidebar();
-        }
-    }
-
-    collapseSidebar() {
-        if (!this.sidebar) return;
-
-        // Save current width before collapsing
-        localStorage.setItem('autonotes_sidebarWidth', parseInt(this.sidebar.style.width));
-
-        // Hide sidebar content
-        this.sidebar.style.width = '0px';
-        this.sidebar.style.padding = '0';
-        this.sidebar.style.border = 'none';
-
-        // Save collapsed state
-        localStorage.setItem('autonotes_sidebarCollapsed', 'true');
-
-        // Create expand toggle button
-        if (!this.expandToggle) {
-            this.expandToggle = document.createElement('button');
-            this.expandToggle.textContent = '◀';
-            this.expandToggle.title = 'Expand AutoNotes';
-            this.expandToggle.style.cssText = `
-                position: fixed;
-                right: 0;
-                top: 50%;
-                transform: translateY(-50%);
-                background: #2a2a2a;
-                color: white;
-                border: 1px solid #555;
-                border-right: none;
-                padding: 20px 8px;
-                cursor: pointer;
-                border-radius: 4px 0 0 4px;
-                z-index: 1000;
-                font-size: 16px;
-            `;
-            this.expandToggle.addEventListener('click', () => this.expandSidebar());
-            document.body.appendChild(this.expandToggle);
-        }
-        this.expandToggle.style.display = 'block';
-    }
-
-    expandSidebar() {
-        if (!this.sidebar) return;
-
-        // Restore saved width
-        const savedWidth = localStorage.getItem('autonotes_sidebarWidth') || '300';
-        this.sidebar.style.width = savedWidth + 'px';
-
-        // Restore padding
-        this.sidebar.style.padding = '10px';
-        this.sidebar.style.borderLeft = '1px solid #555';
-
-        // Save expanded state
-        localStorage.setItem('autonotes_sidebarCollapsed', 'false');
-
-        // Hide expand toggle
-        if (this.expandToggle) {
-            this.expandToggle.style.display = 'none';
+        // Render any already-loaded notes (tab may open after init fetch)
+        if (this.notes.length > 0) {
+            this.renderNotes();
         }
     }
 
@@ -554,6 +399,7 @@ class AutoNotesManager {
     }
 
     renderNotes() {
+        if (!this.notesContainer) return;
         this.notesContainer.innerHTML = '';
 
         // Apply tag filtering
